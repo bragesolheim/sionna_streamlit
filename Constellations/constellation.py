@@ -12,36 +12,23 @@ modulation_mapping = {
     4: "16-QAM (4bits/symbol)",
     6: "64-QAM (6bits/symbol)",
     8: "256-QAM (8bits/symbol)"
-    # Add more mappings as needed
 }
 
-# Sidebar configuration
-# with st.sidebar:
-#     st.title("Simulation Configuration")
-#     num_bits_per_symbol = st.selectbox(
-#         'Modulation Scheme',
-#         options=list(modulation_mapping.keys()),  # The keys are the number of bits
-#         format_func=lambda x: modulation_mapping[x]  # Display the modulation name in the select box
-#     )
-
-
-
-# Display the plot in Streamlit
 st.title("Create a QAM Constellation")
 st.sidebar.title("Simulation Configuration")
-#NUM_BITS_PER_SYMBOL = st.number_input("Number of bits per symbol", min_value=1, max_value=8, value=2, step=2)   # Number of bits per symbol
+
 NUM_BITS_PER_SYMBOL = st.sidebar.selectbox(
         'Modulation Scheme',
-        options=list(modulation_mapping.keys()),  # The keys are the number of bits
-        format_func=lambda x: modulation_mapping[x]  # Display the modulation name in the select box
+        options=list(modulation_mapping.keys()),
+        format_func=lambda x: modulation_mapping[x]  # Displaying the modulation name in the select box
     )
 
 constellation = sn.mapping.Constellation("qam", NUM_BITS_PER_SYMBOL)
 
 
-# Create a BytesIO buffer to capture the plot
+# BytesIO buffer to capture the plot
 buf = io.BytesIO()
-constellation.show()  # This will generate the plot
+constellation.show()  
 plt.savefig(buf, format='png')  # Save the plot to the buffer
 buf.seek(0)  # Rewind the buffer to the beginning
 
@@ -55,7 +42,7 @@ demapper = sn.mapping.Demapper("app", constellation=constellation)
 st.markdown("### Mapper and Demapper")
 input_data = st.text_input("Enter data to be mapped", "1010")
 
-# Convert the input data to a Tensorflow tensor and reshape it to the desired shape
+# Convert the input data to a Tensorflow tensor and reshape it to the desired shape for the mapper
 binary_data = tf.constant([int(b) for b in input_data], dtype=tf.int32)
 binary_data = tf.reshape(binary_data, [1, -1])
 
@@ -90,16 +77,10 @@ block_length = st.sidebar.selectbox(
         help="The number of bits per transmitted message block"
     )
 
-
-
-
-#block_length = 2**exponent
-
 # Convert Eb/N0 to noise variance
 no = sn.utils.ebnodb2no(ebno_db=ebno_db,
                         num_bits_per_symbol=NUM_BITS_PER_SYMBOL,
                         coderate=1.0)  # Coderate set to 1 for uncoded transmission
-
 
 # Generate bits
 bits = binary_source([batch_size, block_length])
@@ -120,7 +101,9 @@ with st.expander("Shape of tensors"):
     st.write(f"Shape of llr: {llr.shape}")
 
 # Select how many samples to print
-num_samples = 8  # This can be adjusted or made into a user input
+max_samples = block_length  # The maximum number of samples is limited by the block length
+num_samples = st.sidebar.slider("Number of Samples to Display", 1, max_samples, min(8, max_samples))
+
 num_symbols = int(num_samples / NUM_BITS_PER_SYMBOL)
 
 
@@ -128,7 +111,6 @@ st.markdown(f"##### First {num_samples} transmitted bits", help="The bits are th
 bits_to_display = bits[0,:num_samples].numpy().tolist() # Converting the tensor to a numpy array and then to a list for display
 bits_df = pd.DataFrame([bits_to_display], columns=[f"Bit {i+1}" for i in range(num_samples)]) 
 st.dataframe(bits_df, hide_index=True)
-
 
 # Coluumns
 col1, col2 = st.columns(2)
@@ -145,7 +127,7 @@ st.markdown(f"##### First {num_samples} demapped LLRs", help="The LLRs are the l
 
 llr_df = pd.DataFrame([np.round(llr[0,:num_samples], 2)], columns=[f"LLR {i+1}" for i in range(num_samples)])
 cco = st.dataframe(llr_df, hide_index=True)
-
+ 
 plt.figure(figsize=(8,8))
 plt.axes().set_aspect(1)
 plt.grid(True)
@@ -157,8 +139,6 @@ real_parts = tf.math.real(y).numpy() if hasattr(y, 'numpy') else y.eval()
 imag_parts = tf.math.imag(y).numpy() if hasattr(y, 'numpy') else y.eval()
 
 plt.scatter(real_parts, imag_parts, color='blue')
-
-# Use tight_layout to ensure the full plot is visible
 plt.tight_layout()
 
 # Streamlit function to display the plot

@@ -1,51 +1,40 @@
+import sys
 import os
-import io
-import pandas as pd
-import streamlit as st # 🎈 data web app development
-gpu_num = 0 # Use "" to use the CPU
-os.environ["CUDA_VISIBLE_DEVICES"] = f"{gpu_num}"
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-# Import Sionna
-try:
-    import sionna as sn
-except ImportError as e:
-    # Install Sionna if package is not already installed
-    import os
-    os.system("pip install sionna")
-    import sionna as sn
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import TensorFlow and NumPy
-import tensorflow as tf
-# Avoid warnings from TensorFlow
-tf.get_logger().setLevel('ERROR')
-import numpy as np
-
-import matplotlib.pyplot as plt
-# For plotting
-# %matplotlib inlines
-# also try %matplotlib widget
-
-import matplotlib.pyplot as plt
-import pickle
-
-# for performance measurements
-import time
-
-# For the implementation of the Keras models
-from tensorflow.keras import Model
-from tensorflow.keras.layers import Dense, Layer
-
+from imports import *
 
 st.sidebar.header("Simulation Parameters")
+# Mapping of bits per symbol to modulation names
+modulation_mapping = {
+    2: "QPSK (2bits/symbol)",
+    4: "16-QAM (4bits/symbol)",
+    6: "64-QAM (6bits/symbol)",
+    8: "256-QAM (8bits/symbol)"
+}
+
+# Displaying the modulation name in the select box
+NUM_BITS_PER_SYMBOL = st.sidebar.selectbox(
+        'Modulation Scheme',
+        options=list(modulation_mapping.keys()),
+        format_func=lambda x: modulation_mapping[x] 
+    )
+
+CODERATE = st.sidebar.slider(
+    'Code Rate (k/n)',
+    min_value=0.1,
+    max_value=1.0,
+    value=0.5,  # Default value of the slider
+    step=0.01,
+    format="%.2f"  # Format to display the float with two decimal places
+)
 EBN0_DB_MIN = st.sidebar.number_input('Eb/N0 Min [dB]', value=-8.0)
 EBN0_DB_MAX = st.sidebar.number_input('Eb/N0 Max [dB]', value=3.0)
 BATCH_SIZE = st.sidebar.number_input('Batch Size', value=128, step=100)
 NUM_UT = st.sidebar.number_input("Number of User Terminals", value=1, step=1)
 NUM_UT_ANTENNAS = st.sidebar.number_input("Number of Antennas per User Terminal", value=1, step=1)
 NUM_BS_ANTENNAS = st.sidebar.number_input("Number of Antennas per Base Station", value=4, step=1)
-NUM_BITS_PER_SYMBOL = 2 # Number of bits per symbol, e.g. 2 for QPSK, 4 for 16-QAM, 6 for 64-QAM, 8 for 256-QAM
-CODERATE = 0.5
 
 NUM_STREAMS_PER_TX = NUM_UT_ANTENNAS
 
@@ -70,7 +59,7 @@ UT_ARRAY = sn.channel.tr38901.Antenna(  polarization="single",
                                         polarization_type="V",
                                         antenna_pattern="38.901",
                                         carrier_frequency=CARRIER_FREQUENCY)
-# UT_ARRAY.show();
+
 
 BS_ARRAY = sn.channel.tr38901.AntennaArray( num_rows=1,
                                             num_cols=int(NUM_BS_ANTENNAS/2),
@@ -78,7 +67,7 @@ BS_ARRAY = sn.channel.tr38901.AntennaArray( num_rows=1,
                                             polarization_type="cross",
                                             antenna_pattern="38.901", # Try 'omni'
                                             carrier_frequency=CARRIER_FREQUENCY)
-# BS_ARRAY.show();
+
 
 DELAY_SPREAD = 100e-9 # Nominal delay spread in [s]. Please see the CDL documentation
                       # about how to choose this value.
@@ -86,7 +75,7 @@ DELAY_SPREAD = 100e-9 # Nominal delay spread in [s]. Please see the CDL document
 DIRECTION = "uplink"  # The `direction` determines if the UT or BS is transmitting.
                       # In the `uplink`, the UT is transmitting.
 
-CDL_MODEL = "C"       # Suitable values are ["A", "B", "C", "D", "E"]
+CDL_MODEL = "A"       # Suitable values are ["A", "B", "C", "D", "E"] 
 
 SPEED = 10.0          # UT speed [m/s]. BSs are always assumed to be fixed.
                      # The direction of travel will chosen randomly within the x-y plane.
@@ -100,6 +89,7 @@ CDL = sn.channel.tr38901.CDL(CDL_MODEL,
                              DIRECTION,
                              min_speed=SPEED)
 
+# https://nvlabs.github.io/sionna/examples/Sionna_tutorial_part4.html#Training-the-Neural-Receiver
 class OFDMSystem(Model): # Inherits from Keras Model
 
     def __init__(self, perfect_csi):
@@ -138,6 +128,7 @@ class OFDMSystem(Model): # Inherits from Keras Model
         # The decoder provides hard-decisions on the information bits
         self.decoder = sn.fec.ldpc.LDPC5GDecoder(self.encoder, hard_out=True)
 
+    # https://nvlabs.github.io/sionna/examples/Sionna_tutorial_part4.html#Training-the-Neural-Receiver
     @tf.function # Graph execution to speed things up
     def __call__(self, batch_size, ebno_db):
         no = sn.utils.ebnodb2no(ebno_db, num_bits_per_symbol=NUM_BITS_PER_SYMBOL, coderate=CODERATE, resource_grid=RESOURCE_GRID)
@@ -190,10 +181,7 @@ def run_simulation(ebno_db_min, ebno_db_max, batch_size):
 model_ls = OFDMSystem(False)
 model_pcsi = OFDMSystem(True)
 
-##################
 # Button to run simulation
-##################
-
 if st.button("Run Simulation"):
     fig = run_simulation(EBN0_DB_MIN, EBN0_DB_MAX, BATCH_SIZE)
     st.pyplot(fig)

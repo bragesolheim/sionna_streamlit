@@ -1,7 +1,7 @@
 import os
 import io
 import pandas as pd
-import streamlit as st # 🎈 data web app development
+import streamlit as st 
 gpu_num = 0 # Use "" to use the CPU
 os.environ["CUDA_VISIBLE_DEVICES"] = f"{gpu_num}"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -15,21 +15,12 @@ except ImportError as e:
     os.system("pip install sionna")
     import sionna as sn
 
-# Import TensorFlow and NumPy
 import tensorflow as tf
 # Avoid warnings from TensorFlow
 tf.get_logger().setLevel('ERROR')
 import numpy as np
-
-import matplotlib.pyplot as plt
-# For plotting
-# %matplotlib inline
-# also try %matplotlib widget
-
 import matplotlib.pyplot as plt
 import pickle
-
-# for performance measurements
 import time
 
 # For the implementation of the Keras models
